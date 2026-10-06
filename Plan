@@ -1,0 +1,111 @@
+For the **Governed Enterprise AI Agent Platform**, I’d plan it as a production platform rather than a demo application. The target should be: **multi-tenant, horizontally scalable, policy-driven, observable, auditable, and model/provider independent**. That fits the Principal FDE role particularly well because the job emphasizes enterprise integrations, production AI deployment, continuous evaluation, risk/compliance, and customer-specific solutions. PrincipalFDE
+
+- **1. Define the production use case first.** Start with one end-to-end workflow such as `Production Incident → Diagnose → Recommend Fix → Approval → Execute → Validate → Audit`. Define measurable outcomes: MTTR reduction, automation rate, policy-block rate, human-approval rate, task success rate, P95 latency, and cost per workflow.
+
+- **2. Separate orchestration from individual agents.** Build an `Agent Orchestrator` responsible for workflow state, routing, retries, timeouts and agent delegation. Keep `Incident Agent`, `Diagnosis Agent`, `Change Agent`, `Deployment Agent`, etc. stateless wherever possible so they can scale independently.
+
+- **3. Put a Governance Gateway between agents and tools.** Agents should never directly call Jira, GitHub, databases, Kubernetes or production APIs. Force every consequential tool invocation through:
+  `Agent → Governance Gateway → Policy Decision → Tool Gateway → Enterprise System`.
+  This becomes the core production control point.
+
+- **4. Give every agent a verifiable identity.** Maintain an Agent Registry containing `agent_id`, owner, capabilities, allowed tools, allowed resources, risk tier, model/version and delegation rules. Use short-lived signed workload/agent credentials rather than API keys embedded in prompts.
+
+- **5. Implement fine-grained authorization.** Evaluate every important action against something like your SCARI model: `Subject + Context + Action + Resource + Environment`. For example, an Incident Agent may read Jira but shouldn't automatically inherit permission to deploy to Kubernetes.
+
+- **6. Implement controlled delegation.** When `IncidentAgent → DiagnosisAgent → ChangeAgent`, propagate only the minimum required capability. Record the delegation chain so you can reconstruct `Human → Agent A → Agent B → Agent C → Action`.
+
+- **7. Create a central Policy Decision Point (PDP).** Keep governance rules outside agent prompts. Policies should return at least `ALLOW`, `DENY`, or `REQUIRE_APPROVAL`, plus reason codes. That means changing governance policy doesn't require retraining or rewriting agents.
+
+- **8. Make governance risk-adaptive.** Classify actions into tiers: read-only search might auto-allow; ticket creation might allow+audit; sensitive-data access may require extra checks; production changes require approval; destructive actions can be denied entirely.
+
+- **9. Build Human-in-the-Loop as a first-class service.** Don't bury approvals inside the agent. Create an Approval Service that receives the proposed action, reason, risk score, affected resource, evidence, agent identity and delegation chain, then issues a signed approval/denial decision.
+
+- **10. Protect data before it reaches the model.** Introduce a Privacy Gateway for PII/secrets classification, redaction/tokenization, data residency and model-routing policies. The architecture should support rules such as `Confidential → private model`, `PII → redact before external LLM`, and `Restricted → never leave enterprise boundary`.
+
+- **11. Make the LLM layer provider-independent.** Put a Model Gateway between agents and model providers:
+  `Agents → Model Gateway → OpenAI / Anthropic / Bedrock / Azure / Local Model`.
+  The gateway handles routing, fallback, quotas, cost, policy enforcement and model/version tracking.
+
+- **12. Design RAG as an enterprise service.** Use a separate retrieval layer for Confluence, Jira, runbooks and enterprise documents. Apply authorization **before retrieval**, not after generation, so an agent cannot retrieve documents the requesting identity wasn't authorized to access.
+
+- **13. Build a dedicated Tool Gateway.** Standardize integrations with Jira, Confluence, GitHub, Slack/Teams, Kubernetes and internal APIs. Each tool should expose a strict schema, timeout, idempotency key, authorization requirements and risk classification.
+
+- **14. Use asynchronous/event-driven execution for long workflows.** Don't hold an HTTP request open while five agents execute. Use something like `API → Workflow Engine → Queue/Event Bus → Agent Workers`. Kafka or a managed equivalent works for events; Temporal/Camunda-style orchestration is useful for durable workflows.
+
+- **15. Make agents horizontally scalable.** Package agents as containers and run them on Kubernetes/EKS or equivalent. Keep runtime state outside pods so replicas can scale based on request rate, queue depth, token workload or latency.
+
+- **16. Treat workflow state separately from conversational memory.** PostgreSQL can hold workflow/governance state; object storage can hold larger artifacts; a vector store handles retrieval; Redis can handle short-lived caching. Don't use an LLM context window as your workflow database.
+
+- **17. Design explicitly for failure.** Add timeouts, retries with backoff, circuit breakers, rate limits, dead-letter queues and idempotent operations. A retry must never accidentally execute a production change twice.
+
+- **18. Build end-to-end observability.** Give every request a `trace_id` and propagate it through `User → Orchestrator → Agent → LLM → Governance → Tool → Enterprise API`. Capture latency, tokens, model/version, retrieved documents, tool calls, policy decisions, failures and final outcomes.
+
+- **19. Maintain an immutable governance audit trail.** Record `who requested → which agent acted → delegated by whom → model used → data accessed → tool called → policy evaluated → approval received → action executed → result`. Your existing data-lineage and AI-observability experience makes this especially credible given the governance/lineage work already on your resume. Akhil_Gupta_Principal_FDE_Resum…
+
+- **20. Separate operational logs from compliance audit.** Operational logs can have normal retention and debugging information. Governance evidence should be tamper-evident, access-controlled and retained according to compliance requirements. Avoid dumping sensitive prompts into ordinary logs.
+
+- **21. Add continuous AI evaluation.** Track more than infrastructure health. Measure task success, groundedness, retrieval quality, tool-selection accuracy, policy violations, false approvals/denials, hallucination rate, escalation rate, cost and latency. The job specifically calls for continuous evaluation, monitoring and improvement of production AI. PrincipalFDE
+
+- **22. Version everything.** Every execution should identify `agent_version`, `prompt_version`, `model_version`, `policy_version`, `tool_version`, and ideally the knowledge/index version. When behavior changes in production, you can reproduce why.
+
+- **23. Build multi-tenancy from the platform boundary.** Use `tenant_id` throughout authentication, storage, retrieval, policy and observability. Separate tenant data and credentials, enforce quotas and allow customer-specific policies without forking the entire platform.
+
+- **24. Add enterprise resilience targets.** Define SLOs such as 99.9% platform availability, P95/P99 latency, queue-delay limits, model-provider failover and recovery objectives. Degrade gracefully: if the LLM is unavailable, don't leave an uncertain production operation halfway executed.
+
+- **25. Secure the software supply chain.** Use CI/CD with unit/integration/evaluation/security tests, container scanning, dependency/SBOM checks, signed artifacts, secret management and progressive deployment. Treat prompts, policies and agent configurations as version-controlled production artifacts.
+
+- **26. Use staged deployment.** Progress through `Local → Dev → Integration → Shadow → Canary → Production`. In shadow mode the agent proposes what it *would* have done without executing it. That's particularly useful for measuring safety before enabling autonomy.
+
+- **27. Add an autonomy maturity model.** A customer shouldn't jump immediately to autonomous production actions. Demonstrate progression: `L0 Observe → L1 Recommend → L2 Act with approval → L3 Act within policy → L4 Autonomous low-risk operations`. Higher-risk actions can remain L1/L2 permanently.
+
+- **28. Build customer configurability without code changes.** Because this is an FDE-oriented project, make integrations, risk thresholds, models, policies, approval chains and agent capabilities configurable per customer. That demonstrates how you'd turn one customer's implementation into reusable product capability.
+
+- **29. Design a production architecture roughly like this:**
+
+```text
+Users / Enterprise Applications
+             │
+        API Gateway
+             │
+      Identity / SSO
+             │
+      Agent Orchestrator
+             │
+    ┌────────┼───────────┐
+    ▼        ▼           ▼
+ Incident  Diagnosis   Change
+ Agent      Agent       Agent
+    │        │           │
+    └────────┼───────────┘
+             ▼
+      Governance Gateway
+             │
+   ┌─────────┼────────────┐
+   ▼         ▼            ▼
+Identity   Policy       Risk
+Service     PDP        Engine
+             │
+      Human Approval
+             │
+        Tool Gateway
+    ┌────────┼────────┬────────┐
+    ▼        ▼        ▼        ▼
+   Jira   Confluence GitHub Kubernetes
+
+             +
+     ┌──────────────────┐
+     │ Model Gateway    │
+     │ RAG Platform     │
+     │ Audit Service    │
+     │ Observability    │
+     │ Evaluation       │
+     └──────────────────┘
+```
+
+- **30. Finally, build it in phases rather than all at once.** **Phase 1:** orchestrator + 3 agents + Jira/Confluence + LLM. **Phase 2:** Governance Gateway + identity + PDP + ALLOW/DENY. **Phase 3:** risk scoring + HITL + delegation. **Phase 4:** RAG + privacy controls. **Phase 5:** OpenTelemetry + audit/evaluation dashboard. **Phase 6:** Kubernetes + Kafka/workflow engine + autoscaling + HA. **Phase 7:** multi-tenancy + canary releases + load/failure testing.
+
+For the interview, the strongest architecture message is:
+
+> **“I deliberately separated intelligence, authority and execution. The LLM can reason about what should happen, but it cannot grant itself permission. Identity establishes who is acting, policy determines whether the action is authorized, the governance layer determines whether additional controls are required, and the tool layer executes only an approved action.”**
+
+That makes the project much more than an **AI governance demo**. It becomes a credible **enterprise agent platform architecture**, which maps closely to the Principal FDE requirement to take AI/ML solutions from customer problems through enterprise integration and production deployment. PrincipalFDE
